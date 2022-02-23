@@ -1,0 +1,36 @@
+#! /bin/bash
+#
+# Este script puede usarse para lanzar un proceso de gpu
+# Se especifica la cola gpu, se solicita una gpu y se solicita 1G RAM para el proceso
+#
+# Para lanzarlo copielo a un directorio en su home y en ese directorio ejecute:
+# qsub ejemploGPU
+#
+# Los procesos en la cola gpu tienen una duración máxima de 3 días
+# Los procesos en la cola gpushort tienen una duración máxima de 20 minutos
+#
+# El sistema de cola devuelve una variable $SGE_GPU que contiene los IDs de los dispositivos requeridos (separados por coma). Ejemplo: 0 o 0,1 dependiendo del numero de recursos pedidos
+# Use este device ID para cudaSetDevice()
+#
+# 
+# Las lineas que comienzan con #$ son opciones para el sistema de cola
+# Todas explicadas en el man qsub
+#
+# en la materia ICNPG siempre usaremos la cola gpushort
+
+#$ -cwd
+#$ -j y
+#$ -S /bin/bash
+#$ -q gpushort
+#$ -l gpu=1
+#$ -l memoria_a_usar=1G
+#$ -N mosquitas
+
+#cargar variables de entorno para encontrar cuda
+module load cuda/10.0.130
+
+echo
+./mosquitas     
+
+      
+
