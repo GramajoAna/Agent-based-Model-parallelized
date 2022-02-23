@@ -1,45 +1,61 @@
 //*************************************************************************************************************
-//                                  Programa FORTRAN de mosquita para una manzana versión (13/6/2020) 
-//                                  Autora Fabiana Laguna
-//*************************************************************************************************************
-/*En la naturaleza, cada oviposicion son aprox. 64 huevos y la mitad son hembras. En este código solamente se modela la dinámica de las hembras. Si se quisiera agregar a los machos, se multiplica por dos. Para ello se considera:
-1- el número de huevos que deposita la hembra  entre 10 y 35 por oviposicion (distribució uniforme).
-2- la mortalidad diaria de huevos, pupas, larvas y adultas independiente de la Temperatura.
-3- el 83% de las larvas pasan a adultas jovenes, es decir, mueren con probab 0.17 al pasar del agua al aire
-4- el nro. de oviposiciones por hembra depende de la temperatura: 
-        - 0 ovip. a 18 grados (es decir, que en invierno las hembras no ponen huevos)
-        - 3 o 4 ovip. a 25 grados 
-        - 6 ovip. a 30 grados.
-        
-5- la mortalidad de la hembra adulta entre los 27 y los 32 dias (distribución uniforme).
-6- la maduración de la pupa entre los 17 y 19 días (distribución uniforme).
-7- la efectividad de la campaña publicitaria a través del vaciado de tachos en los días de mas calor.
-8- "las 4 estaciones", discretizando la curva de temperatura que se tiene para buenos aires (extraído del trabajo de Otero):
-        - el día 1 es 1/07 en este programa (<T>=18°C durante los 1ros 80 dias)
-9- el descacharrado se hace solo en dic, enero y febrero (día 150 al 240)
-10- la hibernación de los huevos en invierno.
-11- la mortalidad de las hembras adultas entre 28 y 30 dias (distribución uniforme).
-12- la saturación de los tachos, es decir, un número maximo de huevos permitidos por tacho
-13- la transferencia de tacho, es decir, cuando un tacho satura, la hembra busca otro tacho para depositar sus huevos.
-Las condiciones iniciales para cada agente mosquita tiene cuatro propiedades
-    -1 o 0 (si está viva o muerta)
-    -edad (avanza de a 1 dia)
-    -cohorte (tacho en el que vive)
-    -tiempo en el que se vuelve adulta
-    -dias que va a vivir
-//*************************************************************************************************************
 //                                  Programa CUDA/C de mosquitas para N manzanas version (2021) 
 //                                  Autoras Ana A. Gramajo y Karina Laneri
 //*************************************************************************************************************
-Se extiende el código serializado de Fabiana, a uno paralelizado ya que se agrega 
-    - la manzana donde se encuentra el cohorte en el que vive la mosquita a las condiciones iniciales.
-    - la espacialidad, considerando que mosquita puede cambiar de manzana a 1ros vecinos para depositar sus huevos cuando se satura su cohorte original.
-    
-Además, en esta nueva versión del código se puede elegir la distribución  de los cohortes por manzana:
-    - distribución uniforme
-    - distribución de Poisson.    
-    
-Los parámetros del código se ingresan a través del archivo parametros.h    
+/*
+The simulation setup:
+	- Spatiality. We consider a square grid of size L x L = M, the number of blocks of the simulated city. 
+
+	- Initial conditions.  We define the total number of mosquitoes in the system N(t=0), i.e., initially we set:
+		State[i]: 0 (alive).
+		Age[i]: a random number between 19 and 25 days (extracted from a uniform distribution).
+    		Bucket[i]: i. 
+    		Block[i]: a random number between 0 and M (extracted from a uniform distribution).
+    		Adulthood[i]: the pupa matures between 17 and 19 days (extracted from a uniform distribution).
+    		LifeSpan[i]: a random number between 27 and 32 days (extracted from a uniform distribution).
+We choose the buckets randomly distributed on the blocks with up to 10 buckets per block. In addition, we initially consider one mosquito per bucket. 
+Then, we calculate the daily mosquito population along a year. For simplicity, we consider 400 days for the simulation. 
+
+Every day we computed the adult and aquatic population considering:
+
+	- Oviposition. According to the model presented by Otero2006,  the average number of eggs laid by one adult female in one oviposition is 63, while the field data obtained by Bergero \textit{et al.} in Ref. \cite{Bergero2012} gives a number of eggs much lower. % than those proposed by Otero \textit{et al}. 
+	Following the Bergero2012 results, we assume that the female lays between 10 and 35 eggs per oviposition (extracted from a uniform distribution). 
+	Moreover, for the number of ovipositions that each female can have, we consider the model given by Otero2006: 
+		- one at 18°C,
+		- four or five at 23°C and 27°C, 
+		- six at 30°C.
+
+	- Mortality rates. We consider the daily mortality of eggs, pupae, larvae, and adults independent of temperature and density. The data was extracted from Otero2006 where:
+        	- The mortality of the eggs is chosen to be 0.01 1/day.
+        	- The death of the larvae is approximated by 0.01 1/day.
+        	- The intrinsic mortality of a pupa has been considered as 0.01 1/day.
+        	- The daily mortality in the pupal stage associated with the unsuccessful emergence of the adult individual is assume a mortality of 0.171/day.
+We consider that the mortality of adults is 0.01 1/day according to the number of days that each individual lives.
+
+	- Death by old age. The mosquito dies when it reaches its chosen life span.
+
+	- Seasons. We discretize the data corresponding to the mean daily temperatures for the period July 2001–July 2002 used by Otero2008 from Buenos Aires, Argentina. The simulation starts on July 1st and, the temperature at different seasons is defined as follows:
+    		-  T=18°C in the range of days [1,80) and (320,400]. 
+    		-  T=23°C between [80, 140] days. 
+    		-  T=30°C within (140,260) days.
+    		-  T=27°C between  [260,320] days. 
+
+	- Saturation of the buckets. We suppose a maximum number of eggs allowed per bucket. This limit is calculated from the knowledge that females lay eggs on wet surfaces just above the water level of the container. Therefore, we assume that for a  diameter container of d = 20 cm with a circumference length given by L = \pi x d = 630 mm and an egg size of s = 0.8 mm, the number of eggs covering the entire perimeter of the garbage is L/s=800. 
+
+	- Bucket transfer. In the present model, when a bucket is saturated by mosquitoes in aquatic stage, the female move to another bucket for oviposition. Previous works (boyce1911,reiter1995,reiter1996) estimated that the range of flight of Ae. ae has a minimum of 100 m in an urban area.
+As result, we assume that adult females can move with a higher probability to another bucket into the same block (80 %) and only can move with a lower probability to the nearest neighbor (20 %).
+
+	- Advertising campaigns. We introduce the discarding effectiveness through the emptying of a percentage (PROP) of the buckets per block during the hottest months, i.e., December, January, and February. In our model, this season corresponds to the range of days (120,320). 
+
+	- Frequency of discarding (TIEMPODESCACH). We chose from a uniform distribution in the interval [1,14] for each container (unless otherwise indicated). In this way, all the buckets are not synchronized to emptying at once.
+
+	- Time-delay in the bucket disponibility (nTau) Once the buckets are emptied during the advertising campaigns, we add a time-delay measured in days until being available.
+
+	- Aquatics hibernation. We include a delay on the development of eggs, larval and pupal stages in the coolest days, i.e., between [1,80) and (320,400) days. 
+
+ 	- Daily count. We count daily the number of adult and aquatic individuals.
+
+	- Daily mosquito population aging. We increase the age of the mosquitoes by one day.   
 ---------------------------------------------------------------------
 */
 
