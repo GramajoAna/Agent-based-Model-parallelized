@@ -95,9 +95,6 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 
 using namespace thrust::placeholders;
 
-//#define ntachito		    5  //agreado para la funcion serial reproducir que viene del codigo bichos.cu
-//#define sat 			    800     //saturación de huevos por tacho viene de bichos.cu reproducir
-
 FILE *archivoT=NULL, *archivoAd=NULL, *archivoAc=NULL, *archivo1=NULL, *archivo2=NULL, *archivo3=NULL;
 char miarch[50];
 
@@ -193,7 +190,6 @@ __global__ void descacharrado_kernel(int *estado, int *edad, int *tacho, int *pu
 			}
     	}
 };
-//elimine el estado[id]=ESTADOVIVO, ya que al final sólo quedan las mosquitas vivas
 
 
 __global__ void envejecer_kernel(int *estado, int *edad,int *pupacion,int *N_mobil,int dia)
@@ -250,7 +246,6 @@ void kernelUnaDim(int *tpd, int *ind, int *disp, bool *mask, int *diadeltacho, i
 			//if dia del tacho modulo freq =0 me fijo si esta disponible y lo marco con 1 para descacharrar
 			//le agrego innicialmente una no sincronizacion empezando a descacharrar un dia aleatorio entre 1 y 7
 			if( (diadeltacho[tacho] + comienzodesc[tacho]) %freq[tacho]==0) //para que no esten sincronizados
-			//if(diadeltacho[tacho] == comienzodesc[tacho] | diadeltacho[tacho]%freq[tacho]==0) esto no hacia lo que queriamos
 			{
             	if(disp[tacho]==0) //el tacho esta disponible
 				{
@@ -318,10 +313,6 @@ struct transferirdetacho{
 
 
 // functorcito  para generar randoms uniformes
-
-// NUEVO: otro functorcito usado para las estadisticas desagregadas
-
-// struct para generar randoms uniformes
 
 struct uniformRanInt{
 	int dia;
@@ -474,7 +465,7 @@ struct bichos{
 	
 
 	//array para almacenar nro de tachos por manzana
-    thrust::device_vector<int> NroTachos;
+    	thrust::device_vector<int> NroTachos;
 	
 	// array de un elemento = device variable
 	thrust::device_vector<int> N_mobil; // Numero de bichos fluctuante (1 elemento)
@@ -488,8 +479,6 @@ struct bichos{
 	int *raw_N_mobil;
 	int *raw_manzana;
 	int *raw_nacidos;
-
-//	int *raw_Tau;
 	int *raw_devTauTacho;
 	int *raw_devDiaDelTacho;
 	bool *raw_mask;
@@ -562,27 +551,9 @@ struct bichos{
 		raw_nacidos=thrust::raw_pointer_cast(nacidos.data());
 
 	
-		//para considerar una distribucion de Poisson de los tachos
-        /*std::default_random_engine generator;
-        std::poisson_distribution<int> distribution(65);
-	    const int nrolls = 100000; // number of experiments
-  	    const int nstars = 100;   // maximum number of stars to distribute
-	    for (int i=0; i<nrolls; ++i) {
-	    int number = distribution(generator);
-	    if (number< N_) ++tacho[number];
-	    }
-	    */
-	    
-		//std::cout<<"VoM\ttacho\tedad\tTdV\ttpupad\tmanzana" << std::endl;
-
 //*************************************************************************************************************
 //                       condiciones iniciales para N_=NINICIAL ingresado en el archivo parametros.h
 //*************************************************************************************************************
-		// std::cout << "******************************************************************************************" << "\n";
-		// std::cout << "************************  condiciones iniciales ************************************" << "\n";
-		// std::cout << "*******************************************************************************************" << "\n";
-		// std::cout << "indice i" <<"\ttachos[i] "<< "\tdispo.[i]"<<  "\tmanzana[i]  " << "\n";
-
 		for(int i=0;i < N_;i++){
 		    
 	    		tacho[i] = i;			                   //tacho en el que se encuentra la mosquita
@@ -696,21 +667,7 @@ struct bichos{
 	    	
 		//Solo el primer dia calculo cuantos tachos por manzana voy a descacharrar luego esto queda fijo
 		if(dia==1)
-		{
-		 /*El siguiente transform con los placeholders no compila bien con la version 11.1 de CUDA*/
-		 /*Tampoco tira error poniendo el CATCH ojo!!!!!!*/ 
-			/*try
-  			{	
-			thrust::transform(
-			devTachosManzana.begin(),devTachosManzana.end(),devEpropManzana.begin(),
-			devDescachManzana.begin(),_1*_2
-			);
-			}
-			catch(thrust::system_error e){
-			std::cerr << "Error inside sort: " << e.what() << std::endl;	
-			exit(1);	
-				}*/		
-				
+		{				
 			/*Opté por la siguiente opcion que va con todos los compiladores siempre que se agregue lo siguiente en el makefile
 			 compilar con nvcc --expt-extended-lambda*/
 			thrust::transform(
@@ -753,15 +710,11 @@ struct bichos{
 					devStartDesc[i]=ran2(semilla)*OFFSETDESCACH; //OFFSET para descacharrado no sincrónico entre 1 y 4 dias
 					std::cout << devFreqDesc[i] << ",  Freq descacharrado" << devStartDesc[i] << ",  Comienzo descach" << std::endl;
     			}
-		//DiasDesc=1 + ran2(semilla)*2*TIEMPODESCACH;      //nro al azar entre [1,14]
 			}	
-	 	//Para evitar sincronizacion en el descacharrado cada tacho comenzará a descacharrar un dia aleatorio de la semana
-		//thrust::fill(devStartDesc.begin(),devStartDesc.end(),121 + ran2(semilla)*6);// + ran2(semilla)*6
 		}
 
 
 	    if(dia > 120 && dia < 320){
-		//if(dia%DiasDesc == 0 && dia > 120 && dia < 320){
 		// el siguiente kernel me saca una mascara con los indices de tachos a descacharrar (todavia no descacharra)
 		kernelUnaDim<<<(NUMEROMANZANAS+BLOCKS-1)/BLOCKS,BLOCKS>>>(
         thrust::raw_pointer_cast(devDescachManzana.data()),
@@ -772,19 +725,6 @@ struct bichos{
 		thrust::raw_pointer_cast(devFreqDesc.data()),
 		thrust::raw_pointer_cast(devStartDesc.data()),dia
     	);
-
-	// // Verifico que tachos se van a descacharrar 
-	// int j=0;
-   	// thrust::host_vector<int> cn_h(devIndicesDescach);
-   	// for(int i=0;i<NUMEROTACHOS;i++){
-    //     if(cn_h[j]==i) 
-    //     {
-    //         std::cout << "|";
-    //         j++;
-    //     }
-    //     std::cout << mask[i];
-    // } 
-    // std::cout << std::endl;
 
 		//El siguiente kernel me descacharra los tachos que diga la mask
 		descacharrado_kernel<<<(N+256-1)/256,256>>>(raw_estado, raw_edad, raw_tacho, raw_pupacion, raw_N_mobil,dia,raw_mask);
@@ -829,22 +769,11 @@ struct bichos{
 
 				//los nuevos vienen del kernel reproducir  
 				int nuevos=nacidos[m];
-
-                //(NUEVO) copio el array donde almaceno la disponibilidad de los tachos después del descacharrado que está en el host y lo llevo al device
-                //thrust::device_vector<int> d_T = Tdispo;
-
-                //int dispo=d_T[m]; //(NUEVO) disponibilidad por tacho m,dispo= 0 para disponible y dispo=nTau para no disponible
- 
-                //chequeo para un día determinado
-			     //   if(dia==140){
-			     //       std::cout << "m: "<< m << "\t" << dispo << "\n";//fuciona 
-			     //   }
 			        
 				    //Ahora bien, si con los nuevos supero el maximo de huevos por tacho (SAT)y (NUEVO) el tacho está disponible
-				    //if(nuevos+antiguos>SAT && dispo==0){
 				if(nuevos+antiguos>SAT && devTauTacho[m]==0){    
-						nuevos=SAT-antiguos;	//ponen lo que pueden en el mismo tacho
-						//nuevos=0; //para imitar lo que hace Fabi que no llena el tacho cuando ve que se va a pasar de la saturacion
+					nuevos=SAT-antiguos;	//ponen lo que pueden en el mismo tacho
+					//nuevos=0; //para imitar lo que hace Fabi que no llena el tacho cuando ve que se va a pasar de la saturacion
 					if(TRANSFERTACHO==1) //transfiero de tacho en misma manzana
 					{
 						int manzanadeltacho;
@@ -888,15 +817,12 @@ struct bichos{
 						
 
 					}	
-						//ComentoKARI //dispo=d_T[m]; //NUEVO disponibilidad del nuevo tacho m luego de hacer la transferencia
-						
-						//Una vez que se llenaron los tachos de la manzana, pone en las manzanas vecinas
+				//Una vez que se llenaron los tachos de la manzana, pone en las manzanas vecinas
 
 				}//cierro if para transferencia de tacho
 				
 
 				/*HASTA ACÁ MAYOR PROBABILIDAD DE TRANSFERENCIA DE TACHO EN LA MISMA MANZANA Y MENOR PORB. DE TRANSFERENCIA DE MANZANA y TACHO */
-                //if(dispo==0){ //NUEVO si el nuevo tacho está disponible, entonces que agregue al final de los arrays las nuevas mosquitas
 				
 				if(devTauTacho[m]==0)
 				{ //KARINUEVO m ahora es el tacho nuevo
@@ -904,8 +830,6 @@ struct bichos{
 					thrust::fill(edad.begin()+index,edad.begin()+index+nuevos,1);		        //nacen con edad(dias)      
 					thrust::fill(tacho.begin()+index,tacho.begin()+index+nuevos,m); 	        //nacen en el tacho m
 
-					//ComentoKARI
-					//thrust::fill(Tau.begin()+index,Tau.begin()+index+nuevos,disponibilidad_del_tacho[m]); //(NUEVO) nacen en un tacho disponible
 					
 					// index en counting iteraror necesario para distintos randoms en cada tacho
 					thrust::transform(
@@ -922,7 +846,7 @@ struct bichos{
 					thrust::fill(manzana.begin()+index,manzana.begin()+index+nuevos,manzana_del_tacho[m]);        
 					index+=nuevos;		//actualizo el indice para me marque siempre en la ultima mosquita que nacio    
 
-                }//cierro if linea 635
+                		}
 
 			}//cierro for para los tachos
 		
@@ -940,58 +864,9 @@ struct bichos{
 		
 	};
 
-/*	void conteo_huevosdebichoscu(int dia){
-	int N=N_mobil[0];
-	//conteo de huevos
-		for(int i=0;i < N; i++){ 
-			tach[i]=0;
-   			if(edad[i] < pupacion[i] && estado[i] == ESTADOVIVO){ 
-    			int j=tacho[i]; 
-	    		tach[j]++;
-			}
-		} 
-	};
- 	void reproducirdebichoscu(int dia,int tovip,long *semilla){	
- 	int indice=N_mobil[0];
- 	//nacimientos
- 	int mosqsat=0;
- 		for(int i=0;i < indice;i++){
- 			if(estado[i] == ESTADOVIVO && edad[i] > pupacion[i] && edad[i]%tovip == 0){
-// etiqueta:			if (tach[tacho[i]] < sat){ 
- //				if (tach[tacho[i]] < sat){ 
-  					  int iovip=10 + (ran2(semilla)*25); 
-    						for(int ik=0;ik < iovip;ik++){ 
-  						estado[indice]=ESTADOVIVO;
-  						edad[indice]=1;   
-  						tacho[indice]=tacho[i]; 
- 		         			pupacion[indice]=TPUPAD-2+(ran2(semilla)*5);	//dias de pupacion
- 	         				TdV[indice]=ran2(semilla)*6+27;  
- 						int j=tacho[indice];
-  						tach[j]++;
- 						indice++;
-    						} 
- 				}
- 				else{
- 			        mosqsat++;   			//sumo las mosquitas que no pudieron poner en este tiempo (solo como dato)
- 				         for(int j=0;j < ntachito;j++){      //si no tiene lugar en su tacho migra a otro 
- 			          		if(tach[j] < sat){   	     // se fija si sus huevos van a tener lugar 
- 			           		tacho[i]=j;          	     //se mueve
- 					        goto etiqueta;               //y arranca a oviponer
- 			        		}
- 			       		 }
- 				}
-  
-    			} 
- 		}
- 		// actualiza el numero de bichos si no se sobrepasa el maximo
- 		N_mobil[0]=indice;
- 	};
-*/
-
-    //Recalcular -> eliminar muertos y dejar vivos
+//Recalcular -> eliminar muertos y dejar vivos
     void recalcularN(){
-//thrust::make_zip_iterator(thrust::make_tuple(edad.begin(),tacho.begin(),pupacion.begin(),TdV.begin(),manzana.begin(),Tau.begin()));
-		
+	    
 		auto zip_iterator=
 		thrust::make_zip_iterator(thrust::make_tuple(edad.begin(),tacho.begin(),pupacion.begin(),TdV.begin(),manzana.begin()));
 		// ordenamos segun estado 0-vivo, 1-muerto
@@ -1008,23 +883,20 @@ struct bichos{
 	int vivos(int dia){
 
 	int N=getNmobil();
-
-    int poblacion = thrust::count(estado.begin(), estado.begin() + N, ESTADOVIVO);
+   	int poblacion = thrust::count(estado.begin(), estado.begin() + N, ESTADOVIVO);
 	return poblacion;
 	};
 
     //población de acuáticos
 	int acuaticos(int dia){
-
-	int N=getNmobil();
-	
-    int ac= thrust::count_if(
+		
+	int N=getNmobil();	
+    	int ac= thrust::count_if(
                 thrust::make_zip_iterator(thrust::make_tuple(edad.begin(),pupacion.begin())),
                 thrust::make_zip_iterator(thrust::make_tuple(edad.begin() +  N,pupacion.begin() + N)),
                 poblacion_2()
             );
-
-		return ac;
+	return ac;
 	};
 
     //población de adultos
@@ -1112,18 +984,15 @@ int main(int argc,char **argv){
     for(int seed=0;seed<NITERACIONES;seed++){
     std::cout << "nro de realizacion: "<< seed+1 << "\n";
     //incializamos semilla
-    //long semilla=(long )time(NULL);
     long semilla = -739 + 100;
-    //long semilla= -739 + atoi(argv[1]);
-
-    //para un descacharrado distinto en casa manzana, lo pongo dentro del loop para que varíe con la semilla
-        //for(int j=0;j<NUMEROMANZANAS;j++){E[j]=0.4 + ran2(&semilla)*0.5;}
+    //long semilla= -739 + atoi(argv[1]); //cuando se mandan múltiples corridas al cluster + using jobGPUtest in Makefile
     
     gpu_timer Reloj_GPU;
     Reloj_GPU.tic();
     
     //inicializo
     bichos mosquitas(NINICIAL,&semilla);
+	    
     //Guardo población total por manzana
     sprintf(miarch,"manzanas_vs_Nro-de-mosquitas_%d.txt",seed);
     archivo1=fopen(miarch,"w");
@@ -1144,9 +1013,7 @@ int main(int argc,char **argv){
     archivoAc=fopen(miarch,"w");
 
 
-    double treprodparalelo=0;
-    //double treprodserial=0;
-    
+    double treprodparalelo=0;    
     double trecalc=0;
     double tdescacha=0;
     
@@ -1170,20 +1037,13 @@ int main(int argc,char **argv){
 	    mosquitas.reproducir(dia,tovip); //version paralela tarda mucho
 	    treprodparalelo= treprodparalelo+Reloj_reproducirparalelo.tac()/60000; //de milisegundos -> minutos
 		
-		// gpu_timer Reloj_reproducirserial;
-	    // Reloj_reproducirserial.tic();
-		// mosquitas.conteo_huevosdebichoscu(dia);//version serial
-		// mosquitas.reproducirdebichoscu(dia,tovip,&semilla); //version serial
-	    // treprodserial= treprodserial+Reloj_reproducirserial.tac()/60000; //de milisegundos -> minutos
-   
-
 	    gpu_timer Reloj_recalcular;
 	    Reloj_recalcular.tic();
 	    //std::cout << "recalcular indice de mosquitas vivas" << std::endl;
 	    mosquitas.recalcularN(); 
 	    trecalc= trecalc+Reloj_recalcular.tac()/60000; //de milisegundos -> minutos
 	
-        //en esta versión del programa solo considero hembras
+            //en esta versión del programa solo considero hembras
 	    int vivas=mosquitas.vivos(dia);
 	    int adultas=mosquitas.adultos(dia);
 	    int acuaticas=mosquitas.acuaticos(dia);
