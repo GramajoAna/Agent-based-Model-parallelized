@@ -1,4 +1,4 @@
-# Modeling population dynamics of the Aedes aegypti mosquito
+# Modeling population dynamics of the Aedes aegypti mosquito (CUDA version)
 
 We present a spatially explicit agent-based model for *Ae. aegypti* mosquito populations.
 We modeled human social behavior by including a set of parameters that mimics different human reactions in relation to water container discard campaigns.
