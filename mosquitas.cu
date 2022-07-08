@@ -588,7 +588,7 @@ struct bichos{
 //std::cout << "verificacion del llenado de tachos x manz. y de la disponibilidad de tacho x manz."<< "\n";
 //std::cout << "*********************************************|***************************************" << "\n";
 
-		int nmanzanas=tachos_por_manzana.size();
+/*		int nmanzanas=tachos_por_manzana.size();
 
 		for(int i=0;i<nmanzanas;i++){
 			//std::cout << "\n\n manzana " << i << "\n";
@@ -602,6 +602,7 @@ struct bichos{
 			}//cierro for para ntachos
 		std::cout << i << "\t" << NroTachos[i] << std::endl;
 		}//cierro for para nmanzanas
+*/		
 	};	
 
 //KARINUEVO: esta funcion sirve para que el programa corte cuando se acaban las mosquitas
